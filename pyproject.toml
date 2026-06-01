@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "voice-clone"
+version = "0.1.0"
+description = "CLI to synthesize speech in a cloned voice from a short reference audio (or video) clip."
+authors = ["sfoley"]
+readme = "README.md"
+packages = [{ include = "voice_clone" }]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+chatterbox-tts = "*"
+click = "^8.1"
+sounddevice = "^0.4"
+numpy = "*"
+torch = "*"
+torchaudio = "*"
+# perth (Chatterbox's audio watermarker) imports pkg_resources at runtime, which
+# lives in setuptools. Python 3.12 venvs no longer bundle setuptools, and
+# setuptools 81+ removed pkg_resources entirely, so pin to a version that still
+# ships it. Without this, PerthImplicitWatermarker silently resolves to None and
+# ChatterboxTTS crashes.
+setuptools = "<81"
+
+[tool.poetry.scripts]
+voice-clone = "voice_clone.cli:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
