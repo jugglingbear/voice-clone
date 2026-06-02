@@ -16,9 +16,11 @@ Usage
 -----
     voice-clone say reference.ext "Text to mimic in cloned voice" [-o output.wav]
 
-``reference.ext`` may be ``.wav``, ``.mp3``, ``.mp4``, or ``.ogg``. If
-``-o/--output`` is omitted, the synthesized audio is played aloud through the
-default output device instead of being written to disk.
+``reference.ext`` may be a ``.wav`` or any common audio/video format ffmpeg can
+decode (``.mp3``, ``.mp4``, ``.ogg``, ``.m4a``, ``.amr``, ``.opus``, ``.3gp``,
+``.caf``, ``.aac``, ``.flac``, ``.aiff``, ...). If ``-o/--output`` is omitted,
+the synthesized audio is played aloud through the default output device instead
+of being written to disk.
 
 Reusable voices
 ---------------
@@ -62,7 +64,27 @@ warnings.filterwarnings("ignore", message=r".*sdp_kernel\(\).*deprecated.*")
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 
-SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".mp4", ".ogg"}
+# Reference formats accepted for cloning. ``.wav`` is used directly; everything
+# else is decoded to 24 kHz mono WAV by ffmpeg, so this list mirrors the common
+# audio/video formats phones and messaging apps produce (iOS Voice Memos, Android
+# recorders, WhatsApp/Telegram/Signal voice notes, MMS, etc.). ffmpeg decodes
+# many more; add an extension here if you need it.
+SUPPORTED_EXTENSIONS = {
+    ".wav",
+    ".mp3",
+    ".mp4",
+    ".ogg",
+    ".amr",  # SMS/MMS voice, older Android (AMR-NB)
+    ".3gp",  # Android MMS audio/video (3GPP)
+    ".3g2",  # 3GPP2
+    ".m4a",  # iOS Voice Memos, Android recorders (AAC)
+    ".aac",  # raw AAC
+    ".caf",  # Apple Core Audio Format
+    ".opus",  # WhatsApp / Telegram / Signal voice notes
+    ".flac",  # lossless
+    ".aiff",  # Apple uncompressed
+    ".aif",  # Apple uncompressed (short suffix)
+}
 TARGET_SAMPLE_RATE = 24_000
 VOICE_SUFFIX = ".voice"
 
@@ -79,7 +101,7 @@ def _select_device() -> str:
 
 
 def _extract_audio_to_wav(reference: Path, dest_dir: Path) -> Path:
-    """Convert an .mp3/.mp4/.ogg reference into a 24 kHz mono WAV using ffmpeg.
+    """Convert a non-WAV reference into a 24 kHz mono WAV using ffmpeg.
 
     Returns the path to the extracted WAV. ``.wav`` inputs are returned as-is.
     """
@@ -88,7 +110,7 @@ def _extract_audio_to_wav(reference: Path, dest_dir: Path) -> Path:
 
     if shutil.which("ffmpeg") is None:
         raise click.ClickException(
-            "ffmpeg is required to read .mp3/.mp4/.ogg references but was not found on PATH. "
+            "ffmpeg is required to read non-WAV references but was not found on PATH. "
             "Install it (macOS: 'brew install ffmpeg', Debian/Ubuntu: "
             "'sudo apt-get install -y ffmpeg') or pass a .wav file instead."
         )
@@ -202,7 +224,7 @@ _reference_option = click.option(
     "--reference",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
-    help="Reference clip (.wav/.mp3/.mp4/.ogg) to clone the voice from.",
+    help="Reference clip to clone the voice from (.wav, or any audio/video ffmpeg can decode).",
 )
 _voice_option = click.option(
     "--voice",
@@ -223,9 +245,10 @@ _exaggeration_option = click.option(
 def main() -> None:
     """Voice cloning CLI built on Chatterbox TTS.
 
-    Clone a voice from a short reference clip (.wav/.mp3/.mp4/.ogg) and
-    synthesize text in that voice. Use 'enroll' to save a reusable voice and
-    'batch' to synthesize many lines in one model-load.
+    Clone a voice from a short reference clip (.wav, .mp3, .m4a, .amr, .opus, and
+    most other audio/video formats) and synthesize text in that voice. Use
+    'enroll' to save a reusable voice and 'batch' to synthesize many lines in one
+    model-load.
     """
 
 

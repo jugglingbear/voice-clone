@@ -17,8 +17,9 @@ A reference clip of roughly **7–15 seconds of clean speech** gives the best cl
 - **Python** 3.10–3.12
 - **[Poetry](https://python-poetry.org/)**
 - **[ffmpeg](https://ffmpeg.org/)** on your `PATH` — required only for non-`.wav` references
-  (`.mp3`, `.mp4`, `.ogg`), whose audio is extracted/converted to 24 kHz mono WAV. `.wav`
-  references skip ffmpeg entirely.
+  (`.mp3`, `.mp4`, `.ogg`, `.m4a`, `.amr`, `.opus`, `.3gp`, `.aac`, `.caf`, `.flac`, `.aiff`, and
+  most other audio/video files phones and messaging apps produce), whose audio is
+  extracted/converted to 24 kHz mono WAV. `.wav` references skip ffmpeg entirely.
 
   ```shell
   # macOS
@@ -74,7 +75,7 @@ Provide the voice via either `-r/--reference` (a clip) or `--voice` (a saved fil
 # Clone from a reference clip and write to a file
 voice-clone say -r jane.wav "Hello, this is my cloned voice." -o out.wav
 
-# .mp3 / .mp4 / .ogg references are converted automatically via ffmpeg
+# Non-.wav references (.mp3, .mp4, .m4a, .amr, .opus, .ogg, ...) convert automatically via ffmpeg
 voice-clone say -r clip.mp4 "Now I sound like the person in that video." -o out.wav
 
 # No -o -> play the synthesized speech aloud immediately
