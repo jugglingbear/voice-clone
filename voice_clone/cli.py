@@ -218,6 +218,49 @@ def _play_wav(wav, sample_rate: int) -> None:
     _play_audio(samples, sample_rate)
 
 
+def _atempo_chain(speed: float) -> str:
+    """Build an ffmpeg ``atempo`` filter chain for an arbitrary speed factor.
+
+    A single ``atempo`` stage only accepts factors in 0.5-2.0, so values outside
+    that range are decomposed into a product of in-range stages.
+    """
+    factors: list[float] = []
+    remaining = speed
+    while remaining < 0.5:
+        factors.append(0.5)
+        remaining /= 0.5
+    while remaining > 2.0:
+        factors.append(2.0)
+        remaining /= 2.0
+    factors.append(remaining)
+    return ",".join(f"atempo={factor:.6f}" for factor in factors)
+
+
+def _change_speed(wav, sample_rate: int, speed: float):
+    """Time-stretch a waveform tensor by ``speed`` (pitch-preserving) via ffmpeg.
+
+    ``speed`` < 1.0 slows the speech down; > 1.0 speeds it up. The pitch is
+    preserved. Returns the adjusted tensor; ``speed == 1.0`` is a no-op.
+    """
+    if speed == 1.0:
+        return wav
+    if shutil.which("ffmpeg") is None:
+        raise click.ClickException("ffmpeg is required for --speed but was not found on PATH.")
+
+    import torchaudio as ta
+
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "speed_in.wav"
+        dst = Path(tmp) / "speed_out.wav"
+        ta.save(str(src), wav, sample_rate)
+        cmd = ["ffmpeg", "-y", "-i", str(src), "-filter:a", _atempo_chain(speed), str(dst)]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if result.returncode != 0 or not dst.exists():
+            raise click.ClickException(f"ffmpeg failed to adjust speed:\n{result.stderr}")
+        adjusted, _ = ta.load(str(dst))
+        return adjusted
+
+
 # Shared options for the source of the voice (a reference clip or a saved voice).
 _reference_option = click.option(
     "-r",
@@ -238,6 +281,13 @@ _exaggeration_option = click.option(
     default=0.5,
     show_default=True,
     help="Emotional intensity of the cloned voice (0.0-1.0).",
+)
+_speed_option = click.option(
+    "--speed",
+    type=click.FloatRange(0.25, 4.0),
+    default=1.0,
+    show_default=True,
+    help="Playback speed multiplier (pitch-preserving). <1.0 is slower, >1.0 is faster.",
 )
 
 
@@ -293,7 +343,15 @@ def enroll(reference: Path, output: Path, exaggeration: float) -> None:
 @_reference_option
 @_voice_option
 @_exaggeration_option
-def say(text: str, output: Path | None, reference: Path | None, voice: Path | None, exaggeration: float) -> None:
+@_speed_option
+def say(
+    text: str,
+    output: Path | None,
+    reference: Path | None,
+    voice: Path | None,
+    exaggeration: float,
+    speed: float,
+) -> None:
     """Synthesize TEXT in a cloned voice.
 
     Provide the voice via either --reference (a clip) or --voice (a saved file).
@@ -302,6 +360,7 @@ def say(text: str, output: Path | None, reference: Path | None, voice: Path | No
     Examples:
         voice-clone say -r sean.mp4 "Hello there" -o hello.wav
         voice-clone say --voice sean.voice "Hello there"
+        voice-clone say --voice sean.voice --speed 0.85 "A little slower, please"
     """
     if (reference is None) == (voice is None):
         raise click.UsageError("Provide exactly one of --reference or --voice.")
@@ -314,6 +373,7 @@ def say(text: str, output: Path | None, reference: Path | None, voice: Path | No
 
         click.echo("Synthesizing...", err=True)
         wav = model.generate(text)
+        wav = _change_speed(wav, model.sr, speed)
 
         if output is not None:
             _save_wav(wav, model.sr, output)
@@ -342,12 +402,14 @@ def say(text: str, output: Path | None, reference: Path | None, voice: Path | No
 @_reference_option
 @_voice_option
 @_exaggeration_option
+@_speed_option
 def batch(
     input_file: Path | None,
     output_dir: Path | None,
     reference: Path | None,
     voice: Path | None,
     exaggeration: float,
+    speed: float,
 ) -> None:
     """Synthesize many lines, loading the model only once.
 
@@ -383,17 +445,18 @@ def batch(
             output_dir.mkdir(parents=True, exist_ok=True)
 
         if lines is not None:
-            _batch_from_lines(model, lines, output_dir)
+            _batch_from_lines(model, lines, output_dir, speed)
         else:
-            _batch_interactive(model, output_dir)
+            _batch_interactive(model, output_dir, speed)
 
 
-def _batch_from_lines(model, lines: list[str], output_dir: Path | None) -> None:
+def _batch_from_lines(model, lines: list[str], output_dir: Path | None, speed: float) -> None:
     """Synthesize a fixed list of lines, saving or playing each."""
     width = len(str(len(lines)))
     for index, text in enumerate(lines, start=1):
         click.echo(f"[{index}/{len(lines)}] {text}", err=True)
         wav = model.generate(text)
+        wav = _change_speed(wav, model.sr, speed)
         if output_dir is not None:
             out = output_dir / f"{index:0{width}d}.wav"
             _save_wav(wav, model.sr, out)
@@ -402,7 +465,7 @@ def _batch_from_lines(model, lines: list[str], output_dir: Path | None) -> None:
             _play_wav(wav, model.sr)
 
 
-def _batch_interactive(model, output_dir: Path | None) -> None:
+def _batch_interactive(model, output_dir: Path | None, speed: float) -> None:
     """Read lines from the prompt until EOF, synthesizing each."""
     click.echo("Enter text to synthesize, one line at a time (Ctrl-D to finish).", err=True)
     index = 0
@@ -417,6 +480,7 @@ def _batch_interactive(model, output_dir: Path | None) -> None:
             continue
         index += 1
         wav = model.generate(text)
+        wav = _change_speed(wav, model.sr, speed)
         if output_dir is not None:
             out = output_dir / f"{index:03d}.wav"
             _save_wav(wav, model.sr, out)

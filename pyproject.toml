@@ -27,3 +27,11 @@ voice-clone = "voice_clone.cli:main"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 120
+
+[tool.mypy]
+# mypy does not flag line length itself; this mirrors the 120-char width used
+# by the other tools so any line-length-aware plugins stay consistent.
+python_version = "3.10"

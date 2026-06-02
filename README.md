@@ -80,6 +80,9 @@ voice-clone say -r clip.mp4 "Now I sound like the person in that video." -o out.
 
 # No -o -> play the synthesized speech aloud immediately
 voice-clone say -r jane.wav "Speak this out loud right now."
+
+# Too fast? Slow it down (pitch-preserving). <1.0 is slower, >1.0 is faster.
+voice-clone say --voice jane.voice --speed 0.85 "This reads at a calmer pace." -o out.wav
 ```
 
 ### `enroll` — save a reusable voice
@@ -114,6 +117,11 @@ voice-clone batch -r jane.mp4
 
 - `--exaggeration` (0.0–1.0) controls the emotional intensity of the cloned voice on every
   command.
+- `--speed` (0.25–4.0, default 1.0) adjusts the playback speed of `say` and `batch` output.
+  Values below 1.0 slow the speech down, above 1.0 speed it up; pitch is preserved. This is a
+  post-process time-stretch via ffmpeg's `atempo` filter — Chatterbox itself has no speech-rate
+  parameter — so `--speed` requires ffmpeg on your `PATH`. Try `0.8`–`0.85` for recordings that
+  read too fast.
 - Chatterbox embeds an imperceptible Perth neural watermark in all generated audio so
   synthesized speech remains identifiable. Use responsibly and only clone voices you have
   permission to use.
